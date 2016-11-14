@@ -168,6 +168,17 @@ class GameOfLifeTest < Minitest::Test
       [0,0,0,0,0],
     ]
 
-    #game(blinker, 10) # uncomment this to see the movement
+    #game blinker, 10  # uncomment this to see the movement
+
+    toad = [
+      [0,0,0,0,0,0],
+      [0,0,0,0,0,0],
+      [0,0,1,1,1,0],
+      [0,1,1,1,0,0],
+      [0,0,0,0,0,0],
+      [0,0,0,0,0,0],
+    ]
+
+    #game toad, 10
   end
 end
