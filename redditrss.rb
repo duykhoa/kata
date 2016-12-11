@@ -3,6 +3,56 @@ require 'minitest/autorun'
 require 'xml'
 
 class RedditTest < Minitest::Test
+  class RedditRssParser
+    class RedditRssDocument
+      class Entry
+        def initialize(entry_xml)
+          @entry_xml = entry_xml
+        end
+
+        def title
+          return nil unless @entry_xml
+          node = @entry_xml.find_first('x:title')
+          node.content if node
+        end
+      end
+
+      def initialize(feed_xml)
+        @feed_xml = feed_xml
+        @feed_xml.root.namespaces.default_prefix = "x"
+      end
+
+      def entries
+        @entries ||= @feed_xml.find("/x:feed/x:entry")
+      end
+
+      def entries_size
+        entries.size
+      end
+
+      def [](index)
+        Entry.new entries[index]
+      end
+    end
+
+    def parse(feed_xml)
+      XML::Error.set_handler do |error|
+        nil
+      end
+
+      begin
+        xml_document = XML::Parser.string(feed_xml).parse
+      rescue XML::Error => e
+        default_xml_string = <<-XML
+<?xml version="1.0" encoding="UTF-8"?><feed xmlns="http://www.w3.org/2005/Atom"></feed>
+        XML
+        xml_document = XML::Parser.string(default_xml_string).parse
+      end
+
+      RedditRssDocument.new(xml_document)
+    end
+  end
+
   class RedditRss
     def initialize(options = {})
       @downloader = options[:downloader]
@@ -38,59 +88,51 @@ class RedditTest < Minitest::Test
     end
   end
 
-  class FakeRedditRssParser
-    class RedditRssDocument
-      class Entry
-        def initialize(entry_xml)
-          @entry_xml = entry_xml
-        end
-
-        def title
-          node = @entry_xml.find_first('x:title')
-          node.content if node
-        end
-      end
-
-      def initialize(feed_xml)
-        @feed_xml = feed_xml
-        @feed_xml.root.namespaces.default_prefix = "x"
-      end
-
-      def entries
-        @entries ||= @feed_xml.find("/x:feed/x:entry")
-      end
-
-      def entries_size
-        entries.size
-      end
-
-      def [](index)
-        Entry.new entries[index]
-      end
+  class FakeRedditRssNoFeedDownloader
+    def download(_)
+      <<-XML
+<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+        </feed>
+      XML
     end
+  end
 
-    def parse(feed_xml)
-      xml_document = XML::Parser.string(feed_xml).parse
-      RedditRssDocument.new(xml_document)
+  class FakeRedditRssEmptyResponseDownloader
+    def download(_)
+      " "
     end
+  end
+
+  def setup
+    @parser = RedditRssParser.new
+    @downloader = FakeRedditRssDownloader.new
+
+    @reddit_rss = RedditRss.new(downloader: @downloader, parser: @parser)
+    @feed = @reddit_rss.rss
   end
 
   def test_rss
-    parser = FakeRedditRssParser.new
-    downloader = FakeRedditRssDownloader.new
-
-    reddit_rss = RedditRss.new(downloader: downloader, parser: parser)
-    feed = reddit_rss.rss
-    assert_equal(1, feed.entries_size)
+    assert_equal(1, @feed.entries_size)
   end
 
   def test_feed_title
-    parser = FakeRedditRssParser.new
-    downloader = FakeRedditRssDownloader.new
-
-    reddit_rss = RedditRss.new(downloader: downloader, parser: parser)
-    feed = reddit_rss.rss
     title = "Arnold Schwarzenegger and Jackie Chan are making a movie together: Journey to China: The Mystery of Iron Mask"
-    assert_equal(title, feed[0].title)
+    assert_equal(title, @feed[0].title)
+  end
+
+  def test_empty_feed
+    downloader = FakeRedditRssNoFeedDownloader.new
+    reddit_rss = RedditRss.new(downloader: downloader, parser: @parser)
+    feed = reddit_rss.rss
+    assert_equal(nil, feed[0].title)
+  end
+
+  def test_empty_respone
+    downloader = FakeRedditRssEmptyResponseDownloader.new
+    reddit_rss = RedditRss.new(downloader: downloader, parser: @parser)
+    feed = reddit_rss.rss
+    assert_equal(0, feed.entries_size)
+    assert_equal(nil, feed[0].title)
   end
 end
