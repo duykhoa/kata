@@ -1,6 +1,6 @@
-require 'byebug'
 require 'minitest/autorun'
 require 'xml'
+require 'net/http'
 
 class RedditTest < Minitest::Test
   class RedditRssParser
@@ -63,6 +63,12 @@ class RedditTest < Minitest::Test
       url = "http://www.reddit.com/.rss"
       feed_xml = @downloader.download(url)
       @parser.parse(feed_xml)
+    end
+  end
+
+  class RedditRssDownloader
+    def download(url)
+      Net::HTTP.get(URI(url))
     end
   end
 
